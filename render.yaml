@@ -7,7 +7,7 @@ services:
     runtime: docker
     plan: free
     region: oregon       # us-west, latencia razonable hacia Perú
-    branch: main
+    branch: master
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
