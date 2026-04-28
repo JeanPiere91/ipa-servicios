@@ -1,0 +1,23 @@
+# Dependencias (las instala el host)
+node_modules/
+
+# Variables de entorno con secretos (nunca subir!)
+.env
+.env.local
+.env.*.local
+
+# Logs y archivos temporales
+*.log
+npm-debug.log*
+/tmp/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Playwright (browsers locales)
+test-results/
+playwright-report/
+playwright/.cache/

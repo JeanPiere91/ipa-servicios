@@ -1,0 +1,15 @@
+# Configuración de Render.com (https://render.com/docs/yaml)
+# Cuando conectes el repo, Render lee este archivo automáticamente.
+
+services:
+  - type: web
+    name: ipa-servicios
+    runtime: docker
+    plan: free
+    region: oregon       # us-west, latencia razonable hacia Perú
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: SERPAPI_KEY
+        sync: false      # NO se sube al repo; lo ingresas en el panel de Render

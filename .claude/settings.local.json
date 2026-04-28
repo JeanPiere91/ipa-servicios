@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/test-disp.sh)",
+      "Bash(/tmp/test-disp.sh)"
+    ]
+  }
+}

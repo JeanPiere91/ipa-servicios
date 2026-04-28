@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inka Planet Adventure · Herramientas de viaje</title>
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .day-cell {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 500;
+        border-radius: 6px;
+        transition: transform 0.1s;
+      }
+      .day-empty { background: transparent; }
+      .day-disabled { background: #fee2e2; color: #991b1b; }
+      .day-available { background: #bbf7d0; color: #14532d; cursor: pointer; }
+      .day-available:hover { transform: scale(1.05); background: #86efac; }
+      .day-loading { background: #fde68a !important; color: #78350f !important; cursor: wait !important; animation: pulse 1.2s infinite; }
+      @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }
+      .day-past { background: #f3f4f6; color: #9ca3af; }
+      .day-today { outline: 2px solid #2563eb; }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800 min-h-screen">
+    <header class="bg-white shadow-md border-b-4 border-orange-500">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center gap-4 flex-wrap">
+        <a href="https://ipa.com.pe" target="_blank" class="flex items-center gap-3 group">
+          <img src="/logo.svg" alt="Inka Planet Adventure" class="h-12 md:h-14" />
+          <div class="hidden sm:block border-l border-slate-200 pl-3">
+            <div class="text-lg md:text-xl font-bold text-slate-800 group-hover:text-orange-600 transition leading-tight">
+              Inka Planet Adventure
+            </div>
+            <div class="text-xs text-slate-500 italic">Somos tu Agencia de Viajes Local y Experta en Perú</div>
+          </div>
+        </a>
+        <div class="flex items-center gap-2">
+          <a href="https://wa.link/3trkvj" target="_blank"
+             class="inline-flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold px-3 py-2 rounded-lg shadow-sm transition">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+            <span class="hidden sm:inline">WhatsApp</span>
+          </a>
+          <a href="tel:+51992005739" class="hidden md:inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-3 py-2 rounded-lg transition">
+            📞 +51 992 005 739
+          </a>
+        </div>
+      </div>
+      <div class="max-w-6xl mx-auto px-6 flex justify-between items-end flex-wrap gap-2">
+        <nav class="flex gap-1">
+          <button data-tab="machupicchu" class="tab-btn px-5 py-2 font-semibold border-b-4 border-orange-500 text-orange-600">Machu Picchu</button>
+          <button data-tab="vuelos" class="tab-btn px-5 py-2 font-semibold border-b-4 border-transparent text-slate-500 hover:text-slate-700">Vuelos</button>
+        </nav>
+        <div id="loaded-at" class="text-xs text-slate-500 pb-2"></div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-6">
+      <div id="tab-machupicchu" class="space-y-6">
+
+      <!-- Banner que aparece cuando el sitio oficial está caído -->
+      <section id="mp-sitio-caido" class="hidden bg-amber-50 border border-amber-300 rounded-lg p-6">
+        <div class="flex items-start gap-4">
+          <div class="text-4xl">⚠️</div>
+          <div class="flex-1">
+            <h3 class="font-bold text-amber-900 text-lg mb-1">El sitio oficial no está disponible</h3>
+            <p class="text-amber-800 text-sm mb-3">
+              <strong>tuboleto.cultura.pe</strong> (Ministerio de Cultura del Perú) no responde en este momento.
+              Estos cortes suelen durar entre 1 y 6 horas.
+            </p>
+            <div class="flex flex-wrap gap-2 text-sm">
+              <button id="mp-reintentar" class="bg-amber-600 text-white font-semibold px-4 py-2 rounded hover:bg-amber-700">
+                🔄 Reintentar
+              </button>
+              <a href="https://tuboleto.cultura.pe/llaqta_machupicchu" target="_blank"
+                 class="bg-white border border-amber-400 text-amber-800 font-semibold px-4 py-2 rounded hover:bg-amber-100">
+                Probar en el sitio oficial
+              </a>
+            </div>
+            <p class="text-amber-700 text-xs mt-3">
+              💡 Mientras tanto, la pestaña <strong>Vuelos</strong> sigue funcionando normal.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="mp-formulario-wrap" class="contents">
+      <section class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-bold mb-4">1. Selecciona circuito y ruta</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Circuito</label>
+            <select id="sel-circuito" class="w-full border rounded p-2 bg-white">
+              <option value="">Cargando…</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Ruta</label>
+            <select id="sel-ruta" class="w-full border rounded p-2 bg-white" disabled>
+              <option value="">— Selecciona circuito primero —</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Meses a consultar</label>
+            <select id="sel-meses" class="w-full border rounded p-2 bg-white">
+              <option value="2">2 meses</option>
+              <option value="3" selected>3 meses</option>
+              <option value="4">4 meses</option>
+              <option value="6">6 meses</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-4 flex gap-3 items-center flex-wrap">
+          <button
+            id="btn-consultar"
+            class="bg-orange-600 text-white font-semibold px-6 py-2 rounded hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+          >
+            Consultar disponibilidad
+          </button>
+        </div>
+      </section>
+
+      <section id="estado" class="hidden bg-blue-50 border border-blue-200 text-blue-800 rounded p-4 text-sm"></section>
+
+      <section id="leyenda" class="hidden bg-white rounded-lg shadow p-4">
+        <div class="flex flex-wrap gap-4 text-sm">
+          <div class="flex items-center gap-2"><span class="day-cell w-6 h-6 day-available"></span> Disponible</div>
+          <div class="flex items-center gap-2"><span class="day-cell w-6 h-6 day-disabled"></span> Agotado / no permitido</div>
+          <div class="flex items-center gap-2"><span class="day-cell w-6 h-6 day-past"></span> Día pasado</div>
+        </div>
+      </section>
+
+      <section id="calendarios" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+      </section><!-- /mp-formulario-wrap -->
+      </div><!-- /tab-machupicchu -->
+
+      <div id="tab-vuelos" class="hidden space-y-6">
+        <section class="bg-white rounded-lg shadow p-6">
+          <h2 class="text-lg font-bold mb-4">Buscar vuelos más baratos</h2>
+          <form id="form-vuelos" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="autocomplete relative" data-ac="origen">
+                <label class="block text-sm font-medium mb-1">Origen</label>
+                <input class="ac-input w-full border rounded p-2" placeholder="Escribe ciudad o aeropuerto, ej. Lima" autocomplete="off" required />
+                <input class="ac-iata" type="hidden" />
+                <ul class="ac-list hidden absolute bg-white border w-full rounded shadow-lg z-20 max-h-72 overflow-auto"></ul>
+              </div>
+              <div class="autocomplete relative" data-ac="destino">
+                <label class="block text-sm font-medium mb-1">Destino</label>
+                <input class="ac-input w-full border rounded p-2" placeholder="Escribe ciudad o aeropuerto, ej. Bogotá" autocomplete="off" required />
+                <input class="ac-iata" type="hidden" />
+                <ul class="ac-list hidden absolute bg-white border w-full rounded shadow-lg z-20 max-h-72 overflow-auto"></ul>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="border rounded-lg p-4 bg-slate-50">
+                <h3 class="font-bold text-sm text-slate-700 mb-3">✈️ Ida</h3>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium mb-1">Fecha</label>
+                    <input id="vue-fecha" type="date" class="w-full border rounded p-2 text-sm" required />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium mb-1">Llegar antes de</label>
+                    <input id="vue-hora" type="time" value="12:00" class="w-full border rounded p-2 text-sm" />
+                  </div>
+                </div>
+              </div>
+              <div class="border rounded-lg p-4 bg-slate-50">
+                <h3 class="font-bold text-sm text-slate-700 mb-3 flex items-center justify-between">
+                  <span>🔁 Vuelta</span>
+                  <label class="text-xs font-normal inline-flex items-center gap-1 select-none">
+                    <input id="vue-conVuelta" type="checkbox" checked /> Incluir
+                  </label>
+                </h3>
+                <div id="vue-vuelta-fields" class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium mb-1">Fecha</label>
+                    <input id="vue-fechaVuelta" type="date" class="w-full border rounded p-2 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium mb-1">Salir después de</label>
+                    <input id="vue-horaVuelta" type="time" value="14:00" class="w-full border rounded p-2 text-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">Adultos (12+)</label>
+                <input id="vue-adultos" type="number" min="1" max="9" value="1" class="w-full border rounded p-2" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Niños (2-11)</label>
+                <input id="vue-ninos" type="number" min="0" max="8" value="0" class="w-full border rounded p-2" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Bebés (&lt;2)</label>
+                <input id="vue-bebes" type="number" min="0" max="4" value="0" class="w-full border rounded p-2" />
+                <span class="text-xs text-slate-500">En regazo</span>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">🧳 Equipaje (por persona)</label>
+                <select id="vue-maletas" class="w-full border rounded p-2 bg-white">
+                  <option value="0">Sin maleta facturada</option>
+                  <option value="1">1 maleta facturada</option>
+                  <option value="2">2 maletas facturadas</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label class="block text-sm font-medium mb-1">Aerolínea preferida</label>
+                <select id="vue-aerolinea" class="w-full border rounded p-2 bg-white">
+                  <option value="">Cualquiera</option>
+                  <option value="LA">LATAM</option>
+                  <option value="AV">Avianca</option>
+                  <option value="H2">Sky Airline</option>
+                  <option value="JA">JetSMART</option>
+                  <option value="VB">Viva Aerobús</option>
+                  <option value="P5">Wingo</option>
+                  <option value="AM">Aeroméxico</option>
+                  <option value="Y4">Volaris</option>
+                  <option value="CM">Copa Airlines</option>
+                  <option value="AR">Aerolíneas Argentinas</option>
+                  <option value="G3">GOL</option>
+                  <option value="AD">Azul</option>
+                  <option value="AA">American Airlines</option>
+                  <option value="DL">Delta</option>
+                  <option value="UA">United</option>
+                  <option value="IB">Iberia</option>
+                  <option value="UX">Air Europa</option>
+                  <option value="KL">KLM</option>
+                  <option value="AF">Air France</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Moneda</label>
+                <select id="vue-moneda" class="w-full border rounded p-2 bg-white">
+                  <option value="USD">USD (Dólares)</option>
+                  <option value="PEN">PEN (Soles)</option>
+                  <option value="EUR">EUR (Euros)</option>
+                  <option value="COP">COP (Pesos colombianos)</option>
+                  <option value="MXN">MXN (Pesos mexicanos)</option>
+                </select>
+              </div>
+              <div>
+                <button type="submit" class="w-full bg-orange-600 text-white font-semibold px-6 py-2 rounded hover:bg-orange-700 disabled:bg-slate-300">
+                  Buscar 5 más baratos
+                </button>
+              </div>
+            </div>
+            <div class="text-sm text-slate-500" id="vue-estado"></div>
+          </form>
+        </section>
+
+        <section id="vue-resultados" class="space-y-3"></section>
+      </div><!-- /tab-vuelos -->
+    </main>
+
+    <!-- Modal de horarios -->
+    <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-auto">
+        <div class="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-5 py-3 flex justify-between items-center">
+          <div>
+            <div id="modal-fecha" class="font-bold"></div>
+            <div id="modal-ruta" class="text-xs text-orange-100"></div>
+          </div>
+          <button id="modal-close" class="text-2xl leading-none hover:text-orange-200">&times;</button>
+        </div>
+        <div id="modal-body" class="p-5"></div>
+      </div>
+    </div>
+
+    <script>
+      const sel = (id) => document.getElementById(id);
+      const $circ = sel('sel-circuito');
+      const $ruta = sel('sel-ruta');
+      const $btn = sel('btn-consultar');
+      const $estado = sel('estado');
+      const $cal = sel('calendarios');
+      const $leyenda = sel('leyenda');
+      const $loadedAt = sel('loaded-at');
+
+      let info = null;
+
+      // Acepta variantes peruanas (setiembre) y formales (septiembre) y devuelve un Date.
+      const MESES_VARIANTES = [
+        ['enero'], ['febrero'], ['marzo'], ['abril'], ['mayo'], ['junio'],
+        ['julio'], ['agosto'], ['setiembre', 'septiembre'], ['octubre'], ['noviembre'], ['diciembre'],
+      ];
+      function parseAriaFecha(aria) {
+        if (!aria) return null;
+        const m = aria.match(/(\d+)\s+de\s+(\w+)\s+de\s+(\d+)/i);
+        if (!m) return null;
+        const nombre = m[2].toLowerCase();
+        const idx = MESES_VARIANTES.findIndex((arr) => arr.includes(nombre));
+        if (idx < 0) return null;
+        return new Date(parseInt(m[3], 10), idx, parseInt(m[1], 10));
+      }
+
+      async function cargarInfo() {
+        const r = await fetch('/api/lugar-info');
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        info = data;
+        $circ.innerHTML =
+          '<option value="">— Selecciona —</option>' +
+          info.circuitos
+            .map((c) => `<option value="${c.nidcircuito}">${c.snombre}</option>`)
+            .join('');
+      }
+
+      $circ.addEventListener('change', () => {
+        const circ = info?.circuitos.find((c) => c.nidcircuito == $circ.value);
+        if (!circ) {
+          $ruta.innerHTML = '<option value="">— Selecciona circuito primero —</option>';
+          $ruta.disabled = true;
+          return;
+        }
+        $ruta.disabled = false;
+        $ruta.innerHTML =
+          '<option value="">— Selecciona ruta —</option>' +
+          circ.rutas.map((r) => `<option value="${r.nidruta}">${r.snombre_corto || r.nombre_ruta}</option>`).join('');
+      });
+
+      $btn.addEventListener('click', async () => {
+        if (!$circ.value || !$ruta.value) {
+          mostrarEstado('Selecciona circuito y ruta primero.', 'error');
+          return;
+        }
+        $btn.disabled = true;
+        $btn.textContent = 'Consultando…';
+        $cal.innerHTML = '';
+        const t0 = performance.now();
+        mostrarEstado('Consultando tuboleto.cultura.pe… (puede tardar 10-15s la primera vez)', 'info');
+
+        try {
+          const url = `/api/disponibilidad?circuito=${$circ.value}&ruta=${$ruta.value}&meses=${sel('sel-meses').value}`;
+          const r = await fetch(url);
+          const cacheHit = r.headers.get('x-cache') === 'HIT';
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const data = await r.json();
+          if (data.error) throw new Error(data.error);
+          render(data);
+          const dt = ((performance.now() - t0) / 1000).toFixed(1);
+          mostrarEstado(
+            `${cacheHit ? '⚡ Caché' : '🌐 Fresco'} · ${data.circuito.snombre} · ${data.ruta.snombre_corto || data.ruta.nombre_ruta} · ${dt}s`,
+            cacheHit ? 'cache' : 'ok',
+          );
+          $loadedAt.textContent = 'Datos: ' + new Date(data.generadoEn).toLocaleString('es-PE');
+        } catch (e) {
+          mostrarEstado('Error: ' + e.message, 'error');
+        } finally {
+          $btn.disabled = false;
+          $btn.textContent = 'Consultar disponibilidad';
+        }
+      });
+
+      function mostrarEstado(msg, tipo) {
+        $estado.classList.remove(
+          'hidden',
+          'bg-blue-50','border-blue-200','text-blue-800',
+          'bg-red-50','border-red-200','text-red-800',
+          'bg-green-50','border-green-200','text-green-800',
+          'bg-amber-50','border-amber-200','text-amber-800',
+        );
+        const cls = {
+          info: ['bg-blue-50','border-blue-200','text-blue-800'],
+          ok: ['bg-green-50','border-green-200','text-green-800'],
+          error: ['bg-red-50','border-red-200','text-red-800'],
+          cache: ['bg-amber-50','border-amber-200','text-amber-800'],
+        }[tipo] || [];
+        cls.forEach((c) => $estado.classList.add(c));
+        $estado.textContent = msg;
+      }
+
+      function render(data) {
+        $leyenda.classList.remove('hidden');
+        $cal.innerHTML = '';
+
+        // Resumen general
+        const totalDisp = data.meses.reduce((acc, m) => acc + m.celdas.filter((c) => !c.disabled && c.dia).length, 0);
+        const totalDias = data.meses.reduce((acc, m) => acc + m.celdas.filter((c) => c.dia).length, 0);
+        const $sum = document.createElement('div');
+        $sum.className = 'col-span-full bg-white rounded-lg shadow p-4 text-sm';
+        $sum.innerHTML = `<strong>Resumen:</strong> ${totalDisp} de ${totalDias} días con disponibilidad en ${data.meses.length} ${data.meses.length === 1 ? 'mes' : 'meses'}`;
+        $cal.appendChild($sum);
+
+        for (const mes of data.meses) {
+          const card = document.createElement('div');
+          card.className = 'bg-white rounded-lg shadow overflow-hidden';
+          const disp = mes.celdas.filter((c) => !c.disabled && c.dia).length;
+          const total = mes.celdas.filter((c) => c.dia).length;
+          const headerColor = disp > 0 ? 'from-green-600 to-green-500' : 'from-slate-500 to-slate-400';
+          card.innerHTML = `
+            <div class="bg-gradient-to-r ${headerColor} text-white px-4 py-2 flex justify-between items-center">
+              <span class="font-bold uppercase">${mes.mes}</span>
+              <span class="text-xs">${disp}/${total} disp.</span>
+            </div>
+            <div class="p-3">
+              <div class="grid grid-cols-7 gap-1 text-xs text-center font-bold text-slate-500 mb-1">
+                <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+              </div>
+              <div class="grid grid-cols-7 gap-1 text-sm"></div>
+            </div>
+          `;
+          const grid = card.querySelector('.grid.grid-cols-7.gap-1.text-sm');
+          const primerDia = mes.celdas.find((c) => c.dia);
+          if (primerDia) {
+            const fechaP = parseAriaFecha(primerDia.ariaLabel);
+            if (fechaP) {
+              let offset = fechaP.getDay() - 1; // L=0 ... D=6
+              if (offset < 0) offset = 6;
+              for (let i = 0; i < offset; i++) {
+                const empty = document.createElement('div');
+                empty.className = 'day-cell day-empty';
+                grid.appendChild(empty);
+              }
+            }
+          }
+          for (const c of mes.celdas) {
+            if (!c.dia) continue;
+            const div = document.createElement('div');
+            const fecha = parseAriaFecha(c.ariaLabel);
+            let esPasado = false;
+            let fechaIso = null;
+            if (fecha) {
+              const hoy = new Date(); hoy.setHours(0,0,0,0);
+              esPasado = fecha < hoy;
+              fechaIso = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2,'0')}-${String(fecha.getDate()).padStart(2,'0')}`;
+            }
+            const cls = esPasado ? 'day-past' : c.disabled ? 'day-disabled' : 'day-available';
+            div.className = `day-cell ${cls}`;
+            div.textContent = c.dia;
+            div.title = c.ariaLabel + (c.disabled && !esPasado ? ' — agotado o no permitido' : '');
+            if (!esPasado && !c.disabled && fechaIso) {
+              div.dataset.fecha = fechaIso;
+              div.dataset.aria = c.ariaLabel;
+              div.addEventListener('click', () => abrirHorarios(div, fechaIso, c.ariaLabel));
+            }
+            grid.appendChild(div);
+          }
+          $cal.appendChild(card);
+        }
+      }
+
+      // --- Modal de horarios -----------------------------------------------
+      const $modal = sel('modal');
+      const $modalFecha = sel('modal-fecha');
+      const $modalRuta = sel('modal-ruta');
+      const $modalBody = sel('modal-body');
+      sel('modal-close').addEventListener('click', cerrarModal);
+      $modal.addEventListener('click', (e) => { if (e.target === $modal) cerrarModal(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarModal(); });
+
+      function cerrarModal() {
+        $modal.classList.add('hidden');
+      }
+
+      async function abrirHorarios(div, fechaIso, ariaLabel) {
+        if (div.classList.contains('day-loading')) return;
+        div.classList.add('day-loading');
+        const circ = info.circuitos.find((c) => c.nidcircuito == $circ.value);
+        const ruta = circ?.rutas.find((r) => r.nidruta == $ruta.value);
+        $modalFecha.textContent = ariaLabel || fechaIso;
+        $modalRuta.textContent = `${circ?.snombre || ''} · ${ruta?.snombre_corto || ruta?.nombre_ruta || ''}`;
+        $modalBody.innerHTML = '<div class="text-slate-500 text-sm py-8 text-center">Consultando horarios… (puede tardar 20-30s)</div>';
+        $modal.classList.remove('hidden');
+        try {
+          const url = `/api/horarios?circuito=${$circ.value}&ruta=${$ruta.value}&fecha=${fechaIso}`;
+          const r = await fetch(url);
+          const data = await r.json();
+          if (data.error) throw new Error(data.error);
+          renderHorarios(data);
+        } catch (e) {
+          $modalBody.innerHTML = '';
+          const err = document.createElement('div');
+          err.className = 'text-red-700 text-sm py-4';
+          err.textContent = 'Error: ' + e.message;
+          $modalBody.appendChild(err);
+        } finally {
+          div.classList.remove('day-loading');
+        }
+      }
+
+      function renderHorarios(data) {
+        if (!data.horarios || data.horarios.length === 0) {
+          $modalBody.innerHTML = `
+            <div class="text-center py-6">
+              <div class="text-4xl mb-2">😞</div>
+              <div class="font-semibold text-slate-700">No hay horarios disponibles</div>
+              <div class="text-sm text-slate-500 mt-1">${data.mensaje || 'Sin slots para esta fecha'}</div>
+            </div>`;
+          return;
+        }
+        const totalCupos = data.horarios.reduce((acc, h) => acc + (h.cupos || 0), 0);
+        const filas = data.horarios
+          .map((h) => {
+            const isAvail = !h.disabled && h.cupos > 0;
+            const colorBg = isAvail ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-200';
+            const colorText = isAvail ? 'text-green-800' : 'text-red-700';
+            const cupoText = isAvail
+              ? `<span class="font-bold text-green-700">${h.cupos} cupos</span>`
+              : `<span class="font-bold text-red-700 uppercase text-xs">Agotado</span>`;
+            return `
+              <div class="flex items-center justify-between p-3 rounded-lg border ${colorBg}">
+                <div class="font-mono text-2xl font-bold ${colorText}">${h.hora || h.texto}</div>
+                <div class="text-right">${cupoText}</div>
+              </div>`;
+          })
+          .join('');
+        $modalBody.innerHTML = `
+          <div class="space-y-2">${filas}</div>
+          <div class="mt-4 pt-3 border-t text-xs text-slate-500 flex justify-between">
+            <span>Total: ${data.horarios.length} horarios</span>
+            <span>${totalCupos} cupos disponibles</span>
+          </div>`;
+      }
+
+      // Carga inicial. Si el sitio oficial está caído (403), muestra banner amigable.
+      function intentarCargarInfo() {
+        sel('mp-sitio-caido').classList.add('hidden');
+        sel('mp-formulario-wrap').classList.remove('hidden');
+        cargarInfo().catch((e) => {
+          const esSitioCaido = /403|tuboleto|bloqueando|no está disponible/i.test(e.message);
+          if (esSitioCaido) {
+            sel('mp-sitio-caido').classList.remove('hidden');
+            sel('mp-formulario-wrap').classList.add('hidden');
+          } else {
+            mostrarEstado('No se pudo cargar info: ' + e.message, 'error');
+          }
+        });
+      }
+      sel('mp-reintentar').addEventListener('click', intentarCargarInfo);
+      intentarCargarInfo();
+
+      // --- Tabs ---------------------------------------------------------
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.tab;
+          document.querySelectorAll('.tab-btn').forEach((b) => {
+            const active = b.dataset.tab === target;
+            b.classList.toggle('border-orange-500', active);
+            b.classList.toggle('text-orange-600', active);
+            b.classList.toggle('border-transparent', !active);
+            b.classList.toggle('text-slate-500', !active);
+          });
+          sel('tab-machupicchu').classList.toggle('hidden', target !== 'machupicchu');
+          sel('tab-vuelos').classList.toggle('hidden', target !== 'vuelos');
+        });
+      });
+
+      // --- Vuelos -------------------------------------------------------
+      const $formVuelos = sel('form-vuelos');
+      const $vueEstado = sel('vue-estado');
+      const $vueResultados = sel('vue-resultados');
+
+      // Defaults: ida en 7 días, vuelta en 14 días
+      (() => {
+        const d1 = new Date(); d1.setDate(d1.getDate() + 7);
+        const d2 = new Date(); d2.setDate(d2.getDate() + 14);
+        sel('vue-fecha').value = d1.toISOString().slice(0, 10);
+        sel('vue-fechaVuelta').value = d2.toISOString().slice(0, 10);
+      })();
+
+      // Toggle: incluir vuelta
+      sel('vue-conVuelta').addEventListener('change', (e) => {
+        const fields = sel('vue-vuelta-fields');
+        fields.style.opacity = e.target.checked ? '1' : '0.4';
+        fields.querySelectorAll('input').forEach((i) => (i.disabled = !e.target.checked));
+      });
+
+      // --- Autocompletado de ciudades (lista local /airports.json) -----
+      let aeropuertos = [];
+      fetch('/airports.json').then((r) => r.json()).then((data) => { aeropuertos = data; }).catch(() => {});
+
+      // Quita acentos para que "bogota" matchee "Bogotá"
+      function normalizar(s) {
+        return s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+      }
+
+      function buscarAeropuertos(q, limit = 8) {
+        const nq = normalizar(q);
+        return aeropuertos
+          .filter((a) =>
+            normalizar(a.ciudad).includes(nq) ||
+            normalizar(a.pais).includes(nq) ||
+            a.iata.toLowerCase().startsWith(nq),
+          )
+          .slice(0, limit);
+      }
+
+      function setupAutocomplete(container) {
+        const $input = container.querySelector('.ac-input');
+        const $iata = container.querySelector('.ac-iata');
+        const $list = container.querySelector('.ac-list');
+
+        function renderList(items) {
+          if (items.length === 0) {
+            $list.innerHTML = '<li class="p-3 text-slate-500 text-sm">Sin resultados</li>';
+          } else {
+            $list.innerHTML = items
+              .map((a) => {
+                const display = `${a.ciudad}, ${a.pais}`;
+                return `<li class="ac-opt p-2 cursor-pointer hover:bg-slate-100 text-sm border-b last:border-b-0"
+                          data-iata="${a.iata}" data-display="${display.replace(/"/g, '&quot;')}">
+                  <span class="font-mono font-bold text-orange-700">${a.iata}</span>
+                  ✈️ ${display}
+                </li>`;
+              })
+              .join('');
+          }
+          $list.classList.remove('hidden');
+        }
+
+        $input.addEventListener('input', () => {
+          $iata.value = '';
+          const q = $input.value.trim();
+          if (q.length < 2) { $list.classList.add('hidden'); return; }
+          renderList(buscarAeropuertos(q));
+        });
+        $list.addEventListener('mousedown', (e) => {
+          const opt = e.target.closest('.ac-opt');
+          if (!opt) return;
+          $iata.value = opt.dataset.iata;
+          $input.value = `${opt.dataset.iata} — ${opt.dataset.display}`;
+          $list.classList.add('hidden');
+        });
+        $input.addEventListener('blur', () => setTimeout(() => $list.classList.add('hidden'), 200));
+        $input.addEventListener('focus', () => {
+          const q = $input.value.trim();
+          if (q.length >= 2) renderList(buscarAeropuertos(q));
+        });
+      }
+      document.querySelectorAll('.autocomplete').forEach(setupAutocomplete);
+
+      $formVuelos.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const acOrigen = document.querySelector('[data-ac="origen"]');
+        const acDestino = document.querySelector('[data-ac="destino"]');
+        const origen = acOrigen.querySelector('.ac-iata').value;
+        const destino = acDestino.querySelector('.ac-iata').value;
+
+        if (!origen || !destino) {
+          $vueEstado.textContent = 'Elegí origen y destino del listado de sugerencias.';
+          return;
+        }
+
+        const fecha = sel('vue-fecha').value;
+        const horaMax = sel('vue-hora').value;
+        const conVuelta = sel('vue-conVuelta').checked;
+        const fechaVuelta = conVuelta ? sel('vue-fechaVuelta').value : '';
+        const horaMinVuelta = conVuelta ? sel('vue-horaVuelta').value : '';
+        const adultos = sel('vue-adultos').value;
+        const ninos = sel('vue-ninos').value;
+        const bebes = sel('vue-bebes').value;
+        const maletas = sel('vue-maletas').value;
+        const aerolinea = sel('vue-aerolinea').value;
+        const moneda = sel('vue-moneda').value;
+        const btn = $formVuelos.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        $vueResultados.innerHTML = '';
+        $vueEstado.textContent = 'Buscando…';
+        try {
+          const params = new URLSearchParams({ origen, destino, fecha, adultos, ninos, bebes, maletas, moneda });
+          if (horaMax) params.set('horaMax', horaMax);
+          if (aerolinea) params.set('aerolinea', aerolinea);
+          if (fechaVuelta) {
+            params.set('fechaVuelta', fechaVuelta);
+            if (horaMinVuelta) params.set('horaMinVuelta', horaMinVuelta);
+          }
+          const r = await fetch('/api/vuelos?' + params.toString());
+          const data = await r.json();
+          if (data.error) throw new Error(data.error);
+          renderVuelos(data);
+          const totales = data.tipo === 'ida-vuelta'
+            ? `${data.totalIdas} idas × ${data.totalVueltas} vueltas`
+            : `${data.totalIdas} resultados`;
+          $vueEstado.textContent = `Mostrando top ${data.opciones.length} de ${totales}`;
+        } catch (err) {
+          $vueEstado.textContent = '';
+          const errDiv = document.createElement('div');
+          errDiv.className = 'bg-red-50 border border-red-200 text-red-800 rounded p-4 text-sm';
+          errDiv.textContent = 'Error: ' + err.message;
+          $vueResultados.appendChild(errDiv);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      function fechaLarga(iso) {
+        return new Date(iso + 'T00:00:00').toLocaleDateString('es-PE', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+        });
+      }
+
+      function tramoTexto(label, t) {
+        const escalas = t.escalas === 0 ? 'Directo' : `${t.escalas} ${t.escalas === 1 ? 'escala' : 'escalas'}`;
+        const cambioFecha = t.fechaSalida && t.fechaLlegada && t.fechaSalida !== t.fechaLlegada ? ' (+1 día)' : '';
+        const vuelosStr = (t.segmentos || [])
+          .map((s) => `${s.aerolinea || ''} ${s.numero || ''}`.trim())
+          .filter(Boolean)
+          .join(', ') || t.numeroVuelo || '';
+        return [
+          `${label}: ${fechaLarga(t.fechaSalida)}`,
+          `  ${t.origen} ${t.salidaHora} → ${t.destino} ${t.llegadaHora}${cambioFecha}`,
+          `  Duración: ${t.duracion}    ${escalas}    Vuelo: ${vuelosStr}`,
+        ].join('\n');
+      }
+
+      function paxResumen(p) {
+        const partes = [];
+        if (p.adultos > 0) partes.push(`${p.adultos} adulto${p.adultos > 1 ? 's' : ''}`);
+        if (p.ninos > 0) partes.push(`${p.ninos} niño${p.ninos > 1 ? 's' : ''}`);
+        if (p.bebes > 0) partes.push(`${p.bebes} bebé${p.bebes > 1 ? 's' : ''}`);
+        return partes.join(', ');
+      }
+
+      function formatearVueloTexto(opcion, params, idx) {
+        const moneda = params.moneda || 'USD';
+        const precioVuelo = opcion.precioVuelo ?? opcion.precioTotal;
+        const costoMaletas = opcion.costoMaletas || 0;
+        const precioTotal = opcion.precioTotal || 0;
+        const aerolinea = opcion.ida.aerolinea || '';
+        const aerolineaVuelta = opcion.vuelta && opcion.vuelta.aerolinea !== aerolinea
+          ? ` / ${opcion.vuelta.aerolinea}`
+          : '';
+        const lineas = [
+          `OPCIÓN ${idx + 1} — ${aerolinea}${aerolineaVuelta}`,
+          tramoTexto('Ida', opcion.ida),
+        ];
+        if (opcion.vuelta) lineas.push(tramoTexto('Vuelta', opcion.vuelta));
+        lineas.push(`Pasajeros: ${paxResumen(params)}`);
+        if (params.maletas > 0) {
+          lineas.push(
+            `Precio del vuelo: ${moneda} ${precioVuelo.toFixed(2)}`,
+            `Equipaje estimado (${params.maletas} maleta${params.maletas > 1 ? 's' : ''} × ${params.adultos + params.ninos} pax): ${moneda} ${costoMaletas.toFixed(2)}`,
+            `Total estimado: ${moneda} ${precioTotal.toFixed(2)}`,
+            `⚠️ El costo de equipaje es referencial; varía según aerolínea, tarifa, peso y tamaño.`,
+          );
+        } else {
+          lineas.push(`Precio total: ${moneda} ${precioTotal.toFixed(2)}`);
+        }
+        return lineas.join('\n');
+      }
+
+      function copiarTexto(texto, btn) {
+        navigator.clipboard.writeText(texto).then(() => {
+          const original = btn.textContent;
+          btn.textContent = '✓ Copiado';
+          btn.classList.add('bg-green-600');
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.classList.remove('bg-green-600');
+          }, 1500);
+        });
+      }
+
+      function tramoCard(label, t) {
+        const escalas = t.escalas === 0
+          ? '<span class="text-green-700 font-semibold text-xs">Directo</span>'
+          : `<span class="text-amber-700 text-xs">${t.escalas} ${t.escalas === 1 ? 'escala' : 'escalas'}</span>`;
+        const cambioFecha = t.fechaSalida && t.fechaLlegada && t.fechaSalida !== t.fechaLlegada
+          ? '<span class="text-amber-600 text-xs ml-1">+1 día</span>'
+          : '';
+        const vuelosStr = (t.segmentos || [])
+          .map((s) => `${s.aerolinea || ''} ${s.numero || ''}`.trim())
+          .filter(Boolean)
+          .join(', ') || t.numeroVuelo || '';
+        const div = document.createElement('div');
+        div.className = 'border-l-4 border-orange-200 pl-3 py-1';
+        div.innerHTML = `
+          <div class="text-xs text-slate-500 font-semibold uppercase">${label} · <span class="aer-tramo"></span></div>
+          <div class="flex items-baseline gap-2 mt-1 flex-wrap">
+            <span class="font-mono text-lg font-bold sal"></span>
+            <span class="text-slate-400 text-sm">${t.origen}</span>
+            <span class="text-slate-400">→</span>
+            <span class="font-mono text-lg font-bold lle"></span>
+            <span class="text-slate-400 text-sm">${t.destino}</span>
+            ${cambioFecha}
+          </div>
+          <div class="text-xs text-slate-500 mt-1">
+            <span class="dur"></span> · ${escalas} · Vuelo <span class="vuelos"></span>
+          </div>
+        `;
+        div.querySelector('.aer-tramo').textContent = t.aerolinea || '';
+        div.querySelector('.sal').textContent = t.salidaHora;
+        div.querySelector('.lle').textContent = t.llegadaHora;
+        div.querySelector('.dur').textContent = t.duracion;
+        div.querySelector('.vuelos').textContent = vuelosStr;
+        return div;
+      }
+
+      function renderVuelos(data) {
+        if (!data.opciones || data.opciones.length === 0) {
+          const div = document.createElement('div');
+          div.className = 'bg-white rounded-lg shadow p-6 text-center';
+          div.innerHTML = `
+            <div class="text-4xl mb-2">😞</div>
+            <div class="font-semibold">No se encontraron vuelos</div>
+            <div class="text-sm text-slate-500 mt-1">
+              Probá con otras fechas, sin filtros de hora, o cambiando origen/destino.
+            </div>`;
+          $vueResultados.appendChild(div);
+          return;
+        }
+
+        const moneda = data.params.moneda || 'USD';
+        const totalPax = (data.params.adultos || 1) + (data.params.ninos || 0) + (data.params.bebes || 0);
+        const todoTexto = data.opciones
+          .map((o, i) => formatearVueloTexto(o, data.params, i))
+          .join('\n\n─────────────────────\n\n');
+
+        const $todo = document.createElement('div');
+        $todo.className = 'bg-white rounded-lg shadow p-4 flex justify-between items-center flex-wrap gap-3';
+        const left = document.createElement('span');
+        left.className = 'text-sm text-slate-600';
+        const subRT = data.tipo === 'ida-vuelta'
+          ? '<br><span class="text-xs text-amber-700">⚠️ Precios indicativos: 2 búsquedas one-way combinadas. Un round-trip real puede ser ~5-10% más barato.</span>'
+          : '';
+        const subEq = data.params.maletas > 0
+          ? '<br><span class="text-xs text-amber-700">🧳 El costo de equipaje es referencial. Varía según aerolínea, tarifa, peso (8/15/23 kg), tamaño y restricciones específicas. Confirmar al reservar.</span>'
+          : '';
+        left.innerHTML = `<strong>${data.opciones.length} opciones</strong> · ${paxResumen(data.params)} · ordenadas de más barata a más cara${subRT}${subEq}`;
+        const btnTodo = document.createElement('button');
+        btnTodo.className = 'bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded hover:bg-slate-800 self-start';
+        btnTodo.textContent = '📋 Copiar todas';
+        btnTodo.addEventListener('click', () => copiarTexto(todoTexto, btnTodo));
+        $todo.appendChild(left);
+        $todo.appendChild(btnTodo);
+        $vueResultados.appendChild($todo);
+
+        data.opciones.forEach((opcion, i) => {
+          const card = document.createElement('div');
+          card.className = 'bg-white rounded-lg shadow overflow-hidden';
+          card.innerHTML = `
+            <div class="p-5">
+              <div class="flex justify-between items-start gap-4 mb-3">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="bg-orange-100 text-orange-700 text-xs font-bold rounded px-2 py-1">OPCIÓN ${i + 1}</span>
+                    <span class="font-semibold aer"></span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-2xl font-bold text-orange-700 prc"></div>
+                  <div class="text-xs text-slate-500 totales"></div>
+                </div>
+              </div>
+              <div class="space-y-3 tramos"></div>
+              <div class="mt-4 flex justify-end">
+                <button class="copiar-uno bg-slate-700 text-white text-sm font-semibold px-3 py-2 rounded hover:bg-slate-800">
+                  📋 Copiar al portapapeles
+                </button>
+              </div>
+            </div>
+          `;
+          const aerIda = opcion.ida.aerolinea || '';
+          const aerVuelta = opcion.vuelta && opcion.vuelta.aerolinea !== aerIda
+            ? ` / ${opcion.vuelta.aerolinea}`
+            : '';
+          card.querySelector('.aer').textContent = aerIda + aerVuelta;
+          card.querySelector('.prc').textContent = `${moneda} ${(opcion.precioTotal || 0).toFixed(2)}`;
+          if (data.params.maletas > 0) {
+            const precioVuelo = opcion.precioVuelo ?? opcion.precioTotal;
+            const costoMal = opcion.costoMaletas || 0;
+            card.querySelector('.totales').innerHTML =
+              `<div>vuelo ${moneda} ${precioVuelo.toFixed(2)} + equipaje ${moneda} ${costoMal.toFixed(2)}</div>` +
+              `<div class="text-amber-700">${data.params.maletas} maleta${data.params.maletas > 1 ? 's' : ''} × ${(data.params.adultos || 0) + (data.params.ninos || 0)} pax (estimado)</div>`;
+          } else {
+            card.querySelector('.totales').textContent = totalPax > 1 ? `${totalPax} pax` : 'total';
+          }
+          const $tramos = card.querySelector('.tramos');
+          $tramos.appendChild(tramoCard('Ida', opcion.ida));
+          if (opcion.vuelta) $tramos.appendChild(tramoCard('Vuelta', opcion.vuelta));
+          card.querySelector('.copiar-uno').addEventListener('click', (ev) =>
+            copiarTexto(formatearVueloTexto(opcion, data.params, i), ev.currentTarget),
+          );
+          $vueResultados.appendChild(card);
+        });
+      }
+    </script>
+  </body>
+</html>
