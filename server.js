@@ -1,24 +1,23 @@
-// Servidor local que expone una vista HTML interactiva con la disponibilidad
-// de entradas a Machu Picchu, scrapeando la web oficial tuboleto.cultura.pe.
+// IPA Servicios — backend
 //
-// Endpoints:
-//   GET /                              -> vista HTML
-//   GET /api/lugar-info                -> circuitos, rutas, procedencias (proxy directo, no cifrado)
-//   GET /api/disponibilidad?circuito=N&ruta=N&meses=N[&nocache=1]
-//                                      -> días disponibles vs agotados de los próximos N meses
-//   GET /api/horarios?circuito=N&ruta=N&fecha=YYYY-MM-DD[&nocache=1]
-//                                      -> horarios y cupos disponibles para una fecha puntual
+// Fuentes:
+//   - Machu Picchu: tuboleto.cultura.pe (oficial). Se accede via Playwright
+//     conectado a Browserless.io para usar IPs rotativas residenciales que
+//     no estén bloqueadas por el WAF del Mincu.
+//   - Vuelos: SerpAPI Google Flights.
 
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 const PORT = process.env.PORT || 3000;
+const SERPAPI_KEY = process.env.SERPAPI_KEY;
+const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 const SITE_URL = 'https://tuboleto.cultura.pe/llaqta_machupicchu';
 const API_URL = 'https://api-tuboleto.cultura.pe';
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const SERPAPI_KEY = process.env.SERPAPI_KEY;
 const APIWAIT_FECHAS = '/visita/consulta-fechas-disponibles';
 const APIWAIT_HORARIOS = '/visita/consulta-horarios';
 
@@ -36,6 +35,7 @@ const SEL = {
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Caché y single-flight ----------------------------------------------
 const cache = new Map();
 function cacheGet(key) {
   const entry = cache.get(key);
@@ -50,34 +50,112 @@ function cacheSet(key, data) {
   cache.set(key, { data, expires: Date.now() + CACHE_TTL_MS });
 }
 
-// Single-flight: si ya hay una promesa en vuelo para una clave de caché,
-// los requests posteriores comparten esa misma promesa.
 const inFlight = new Map();
 function singleFlight(key, fn) {
   const existing = inFlight.get(key);
   if (existing) return existing;
   const p = (async () => {
-    try {
-      return await fn();
-    } finally {
-      inFlight.delete(key);
-    }
+    try { return await fn(); }
+    finally { inFlight.delete(key); }
   })();
   inFlight.set(key, p);
   return p;
 }
 
-let browserPromise = null;
-function getBrowser() {
-  if (!browserPromise) browserPromise = chromium.launch({ headless: true });
-  return browserPromise;
+// --- Conexión a Browserless ---------------------------------------------
+// URL para Playwright nativo (no CDP). Endpoint v2 con región SFO.
+// Cada llamada abre una conexión nueva → IP rotativa por consulta.
+const BROWSERLESS_REGION = process.env.BROWSERLESS_REGION || 'production-sfo';
+async function connectBrowser() {
+  if (!BROWSERLESS_TOKEN) {
+    throw new Error(
+      'Falta configurar BROWSERLESS_TOKEN en archivo .env. Registrate en https://www.browserless.io',
+    );
+  }
+  const url = `wss://${BROWSERLESS_REGION}.browserless.io/chromium/playwright?token=${BROWSERLESS_TOKEN}`;
+  return chromium.connect(url);
 }
 
+// --- Sesiones reutilizables de browser por (circuito, ruta) -------------
+// Cuando termina una consulta, dejamos el browser vivo 45s para que la
+// siguiente consulta de la misma ruta (típicamente click en un día) reuse
+// el setup en lugar de rehacer todo.
+const SESSION_TTL_MS = 45_000;
+const sessions = new Map(); // key: "mp:circuito:ruta" → { browser, context, page, timer, busy }
+
+function sessionKey(idCircuito, idRuta) {
+  return `mp:${idCircuito}:${idRuta}`;
+}
+
+async function cerrarSesion(key) {
+  const s = sessions.get(key);
+  if (!s) return;
+  sessions.delete(key);
+  clearTimeout(s.timer);
+  await s.context.close().catch(() => {});
+  await s.browser.close().catch(() => {});
+}
+
+function programarCierre(key) {
+  const s = sessions.get(key);
+  if (!s) return;
+  clearTimeout(s.timer);
+  s.timer = setTimeout(() => cerrarSesion(key), SESSION_TTL_MS);
+}
+
+// Devuelve una sesión lista para usar (browser + page con circuito y ruta
+// seleccionados, calendario abierto). Reusa si ya hay una activa para la
+// misma key, sino crea una nueva.
+async function obtenerSesion(idCircuitoQ, idRutaQ) {
+  const key = sessionKey(idCircuitoQ, idRutaQ);
+  const existing = sessions.get(key);
+  if (existing && !existing.busy) {
+    clearTimeout(existing.timer);
+    existing.busy = true;
+    existing.reused = true;
+    return existing;
+  }
+  // Si la sesión está ocupada por otra consulta paralela, abrimos una nueva
+  // efímera (no la guardamos en el Map para no romper la sesión activa).
+  if (existing && existing.busy) {
+    const { circuito, ruta, idxCircuito, idxRuta } = await resolverIndices(idCircuitoQ, idRutaQ);
+    const browser = await connectBrowser();
+    const { page, context } = await abrirFormularioConCalendario(browser, idxCircuito, idxRuta);
+    return { browser, context, page, circuito, ruta, idCircuitoQ, idRutaQ, busy: true, reused: false, efimera: true };
+  }
+  const { circuito, ruta, idxCircuito, idxRuta } = await resolverIndices(idCircuitoQ, idRutaQ);
+  const browser = await connectBrowser();
+  const { page, context } = await abrirFormularioConCalendario(browser, idxCircuito, idxRuta);
+  const session = {
+    browser, context, page,
+    circuito, ruta,
+    idCircuitoQ, idRutaQ,
+    timer: null, busy: true, reused: false, efimera: false,
+  };
+  sessions.set(key, session);
+  return session;
+}
+
+// Marca la sesión libre y programa su cierre. Si la sesión es efímera
+// (otra estaba corriendo en paralelo), la cerramos directo.
+async function liberarSesion(session) {
+  if (session.efimera) {
+    await session.context.close().catch(() => {});
+    await session.browser.close().catch(() => {});
+    return;
+  }
+  session.busy = false;
+  programarCierre(sessionKey(session.idCircuitoQ, session.idRutaQ));
+}
+
+// --- Llamada directa a /visita/lugar-info (intenta sin browser primero) -
 async function fetchLugarInfo() {
   const cached = cacheGet('lugar-info');
   if (cached) return cached;
+
+  // Intento 1: fetch directo (algunas IPs sí pasan)
   let lastErr;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     try {
       const r = await fetch(`${API_URL}/visita/lugar-info?idLugar=llaqta_machupicchu`, {
         headers: {
@@ -89,7 +167,8 @@ async function fetchLugarInfo() {
         },
       });
       if (r.status === 403) {
-        throw new Error('La API de tuboleto.cultura.pe está bloqueando la conexión (403). Probá: 1) abrir el sitio en tu navegador para ver si carga, 2) esperar 30-60 min e intentar de nuevo.');
+        lastErr = new Error('lugar-info HTTP 403');
+        break; // 403 no se resuelve con retry, salimos al fallback
       }
       if (!r.ok) throw new Error('lugar-info HTTP ' + r.status);
       const data = await r.json();
@@ -102,19 +181,46 @@ async function fetchLugarInfo() {
       return out;
     } catch (e) {
       lastErr = e;
-      // 403 no se reintenta (no se va a resolver con retry rápido)
-      if (e.message.includes('403')) throw e;
-      if (i < 2) await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
     }
   }
-  throw lastErr;
+
+  // Intento 2: usar el browser de Browserless (IP rotativa)
+  if (!BROWSERLESS_TOKEN) throw lastErr;
+  const browser = await connectBrowser();
+  const context = await browser.newContext({ locale: 'es-PE' });
+  try {
+    const page = await context.newPage();
+    await page.goto(SITE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.locator('mat-select').first().waitFor({ timeout: 60000 });
+    const data = await page.evaluate(async (url) => {
+      const r = await fetch(url, { headers: { accept: 'application/json, text/plain, */*' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }, `${API_URL}/visita/lugar-info?idLugar=llaqta_machupicchu`);
+    const out = {
+      ...data,
+      circuitos: JSON.parse(data.circuitos || '[]'),
+      procedencias: JSON.parse(data.procedencias || '[]'),
+    };
+    cacheSet('lugar-info', out);
+    return out;
+  } finally {
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
+  }
 }
 
 app.get('/api/lugar-info', async (req, res) => {
   try {
     res.json(await fetchLugarInfo());
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const msg = e.message;
+    const esBloqueo = /403|tuboleto|forbbiden|forbidden/i.test(msg);
+    res.status(esBloqueo ? 503 : 500).json({
+      error: esBloqueo
+        ? 'La API de tuboleto.cultura.pe está bloqueando la conexión (403). Intentá de nuevo en unos minutos.'
+        : msg,
+    });
   }
 });
 
@@ -135,35 +241,17 @@ function waitApi(page, pattern, ms = 8000) {
 }
 
 function leerHeaderCalendario(page) {
-  return page.evaluate(
-    (s) => document.querySelector(s)?.innerText.trim() || '',
-    SEL.calendarHeader,
-  );
+  return page.evaluate((s) => document.querySelector(s)?.innerText.trim() || '', SEL.calendarHeader);
 }
 
 async function abrirFormularioConCalendario(browser, idxCircuito, idxRuta) {
   const context = await browser.newContext({
     locale: 'es-PE',
     viewport: { width: 1366, height: 1100 },
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   });
   try {
     const page = await context.newPage();
-
-    // Retry goto: la red doméstica intermitente devuelve ERR_NAME_NOT_RESOLVED
-    let gotoErr;
-    for (let i = 0; i < 3; i++) {
-      try {
-        await page.goto(SITE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        gotoErr = null;
-        break;
-      } catch (e) {
-        gotoErr = e;
-        if (i < 2) await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
-      }
-    }
-    if (gotoErr) throw gotoErr;
+    await page.goto(SITE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     await page.locator(SEL.matSelect).first().waitFor({ timeout: 60000 });
     await page.waitForFunction(
@@ -210,13 +298,26 @@ async function abrirFormularioConCalendario(browser, idxCircuito, idxRuta) {
 async function asegurarCalendarioAbierto(page) {
   const open = await page.locator(SEL.calendar).count();
   if (open === 0) {
-    // Limpiar backdrop residual que podría interceptar el click siguiente
     await page.evaluate(() => {
       document.querySelectorAll('.cdk-overlay-backdrop').forEach((b) => b.remove());
     });
     await page.evaluate((s) => document.querySelector(s)?.click(), SEL.openCalendar);
     await page.locator(SEL.calendarCell).first().waitFor({ timeout: 8000 });
   }
+}
+
+const MESES_ABREV = [
+  ['ene'], ['feb'], ['mar'], ['abr'], ['may'], ['jun'],
+  ['jul'], ['ago'], ['set', 'sep'], ['oct'], ['nov'], ['dic'],
+];
+
+function parseHeaderCalendario(header) {
+  const m = header.match(/([A-ZÁ-Úa-zá-ú.]+)\s+(\d{4})/);
+  if (!m) return null;
+  const abrev = m[1].toLowerCase().replace('.', '').slice(0, 3);
+  const idx = MESES_ABREV.findIndex((arr) => arr.includes(abrev));
+  if (idx < 0) return null;
+  return { mes: idx, anio: parseInt(m[2], 10) };
 }
 
 async function navegarA(page, targetMes, targetAnio) {
@@ -233,8 +334,8 @@ async function navegarA(page, targetMes, targetAnio) {
   return false;
 }
 
-// El click sobre el botón de cambio de mes suele cerrar el panel del calendario
-// en esta SPA; navegarA reabre con asegurarCalendarioAbierto y reintenta.
+// El click sobre el botón de cambio suele cerrar el panel del calendario en
+// esta SPA; navegarA reabre con asegurarCalendarioAbierto y reintenta.
 async function cambiarMes(page, adelante = true) {
   const respPromise = waitApi(page, APIWAIT_FECHAS, 10000);
   const clickResult = await page.evaluate(
@@ -271,10 +372,9 @@ app.get('/api/disponibilidad', async (req, res) => {
   try {
     const out = await singleFlight(cacheKey, async () => {
       const t0 = Date.now();
-      const { circuito, ruta, idxCircuito, idxRuta } = await resolverIndices(idCircuitoQ, idRutaQ);
-      const browser = await getBrowser();
-      const { page, context } = await abrirFormularioConCalendario(browser, idxCircuito, idxRuta);
+      const session = await obtenerSesion(idCircuitoQ, idRutaQ);
       try {
+        const { page, circuito, ruta } = session;
         const headerInicial = await leerHeaderCalendario(page);
         const inicial = parseHeaderCalendario(headerInicial);
         if (!inicial) throw new Error(`No se pudo parsear el header inicial: "${headerInicial}"`);
@@ -299,18 +399,18 @@ app.get('/api/disponibilidad', async (req, res) => {
           );
           mesesData.push(mesData);
         }
-
         const result = {
           circuito,
           ruta,
           meses: mesesData,
           generadoEn: new Date().toISOString(),
           tomoMs: Date.now() - t0,
+          reused: session.reused,
         };
         cacheSet(cacheKey, result);
         return result;
       } finally {
-        await context.close();
+        await liberarSesion(session);
       }
     });
     res.set('X-Cache', 'MISS');
@@ -319,20 +419,6 @@ app.get('/api/disponibilidad', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
-const MESES_ABREV = [
-  ['ene'], ['feb'], ['mar'], ['abr'], ['may'], ['jun'],
-  ['jul'], ['ago'], ['set', 'sep'], ['oct'], ['nov'], ['dic'],
-];
-
-function parseHeaderCalendario(header) {
-  const m = header.match(/([A-ZÁ-Úa-zá-ú.]+)\s+(\d{4})/);
-  if (!m) return null;
-  const abrev = m[1].toLowerCase().replace('.', '').slice(0, 3);
-  const idx = MESES_ABREV.findIndex((arr) => arr.includes(abrev));
-  if (idx < 0) return null;
-  return { mes: idx, anio: parseInt(m[2], 10) };
-}
 
 app.get('/api/horarios', async (req, res) => {
   const idCircuitoQ = parseInt(req.query.circuito, 10);
@@ -360,10 +446,12 @@ app.get('/api/horarios', async (req, res) => {
   try {
     const out = await singleFlight(cacheKey, async () => {
       const t0 = Date.now();
-      const { circuito, ruta, idxCircuito, idxRuta } = await resolverIndices(idCircuitoQ, idRutaQ);
-      const browser = await getBrowser();
-      const { page, context } = await abrirFormularioConCalendario(browser, idxCircuito, idxRuta);
+      const session = await obtenerSesion(idCircuitoQ, idRutaQ);
       try {
+        const { page, circuito, ruta } = session;
+        // Cerrar el dropdown de horarios si quedó abierto de una consulta anterior
+        await page.keyboard.press('Escape').catch(() => {});
+
         const llegoAlMes = await navegarA(page, targetMonth, targetYear);
         if (!llegoAlMes) throw new Error('No se pudo navegar al mes solicitado');
         await asegurarCalendarioAbierto(page);
@@ -393,6 +481,7 @@ app.get('/api/horarios', async (req, res) => {
             horarios: [],
             mensaje: 'Día agotado o no permitido',
             tomoMs: Date.now() - t0,
+            reused: session.reused,
           };
           cacheSet(cacheKey, result);
           return result;
@@ -439,11 +528,12 @@ app.get('/api/horarios', async (req, res) => {
           horarios,
           generadoEn: new Date().toISOString(),
           tomoMs: Date.now() - t0,
+          reused: session.reused,
         };
         cacheSet(cacheKey, result);
         return result;
       } finally {
-        await context.close();
+        await liberarSesion(session);
       }
     });
     res.set('X-Cache', 'MISS');
@@ -482,8 +572,6 @@ function minToFmt(min) {
   return [h ? `${h}h` : '', m ? `${m}m` : ''].filter(Boolean).join(' ') || '0m';
 }
 
-// SerpAPI devuelve cada opción con flights[] (segmentos), total_duration, price, type.
-// Cada flight tiene departure_airport y arrival_airport con {id, name, time}.
 function parsearTarjetaSerpapi(card) {
   const segs = card.flights || [];
   const first = segs[0] || {};
@@ -525,7 +613,7 @@ async function buscarTramoSerpapi({ origen, destino, fecha, adultos, ninos, bebe
   url.searchParams.set('departure_id', origen);
   url.searchParams.set('arrival_id', destino);
   url.searchParams.set('outbound_date', fecha);
-  url.searchParams.set('type', '2'); // 2 = one-way
+  url.searchParams.set('type', '2');
   url.searchParams.set('currency', moneda);
   url.searchParams.set('hl', 'es');
   url.searchParams.set('gl', 'pe');
@@ -535,8 +623,6 @@ async function buscarTramoSerpapi({ origen, destino, fecha, adultos, ninos, bebe
   if (aerolinea) url.searchParams.set('include_airlines', aerolinea);
   url.searchParams.set('api_key', SERPAPI_KEY);
 
-  // Reintentos para errores transitorios de SerpAPI ("Internal SerpApi error", 5xx HTTP)
-  // y solo para esos. "No results" se trata como [] sin reintentar.
   let lastErr;
   for (let intento = 0; intento < 3; intento++) {
     if (intento > 0) await new Promise((r) => setTimeout(r, 2000 * intento));
@@ -546,9 +632,7 @@ async function buscarTramoSerpapi({ origen, destino, fecha, adultos, ninos, bebe
 
     if (data?.error) {
       const msg = String(data.error);
-      if (/hasn't returned any results|no results|couldn't find/i.test(msg)) {
-        return []; // ruta sin vuelos: no es error fatal ni transitorio
-      }
+      if (/hasn't returned any results|no results|couldn't find/i.test(msg)) return [];
       if (/internal serpapi error|temporarily unavailable|try again/i.test(msg)) {
         lastErr = new Error('SerpAPI temporalmente caído. Reintentá en 30s.');
         continue;
@@ -557,18 +641,15 @@ async function buscarTramoSerpapi({ origen, destino, fecha, adultos, ninos, bebe
     }
     if (!r.ok) {
       lastErr = new Error(`SerpAPI HTTP ${r.status}`);
-      if (r.status >= 500) continue; // reintentamos solo errores de servidor
+      if (r.status >= 500) continue;
       throw lastErr;
     }
-
     const cartas = [...(data.best_flights || []), ...(data.other_flights || [])];
     return cartas.map(parsearTarjetaSerpapi);
   }
   throw lastErr;
 }
 
-// Costo referencial de 1 maleta facturada por persona, por moneda.
-// El monto real lo define la aerolínea + tarifa elegida — esto es solo una estimación.
 const COSTO_MALETA = {
   USD: 40,
   PEN: 150,
@@ -622,7 +703,6 @@ app.get('/api/vuelos', async (req, res) => {
     }
 
     const opcionesSerpapi = { adultos, ninos, bebes, moneda, aerolinea };
-
     let idas = await buscarTramoSerpapi({ origen, destino, fecha: fechaIda, ...opcionesSerpapi });
     if (horaMaxLlegadaIda) {
       const limite = horaToMin(horaMaxLlegadaIda);
@@ -643,9 +723,6 @@ app.get('/api/vuelos', async (req, res) => {
         if (limite != null) vueltas = vueltas.filter((v) => horaToMin(v.salidaHora) >= limite);
       }
       vueltas.sort((a, b) => a.precio - b.precio);
-
-      // 2 búsquedas one-way combinadas. No es package-priced (puede ser 5-10% más caro
-      // que un round-trip real), se aclara en el UI.
       const combos = [];
       for (const ida of idas.slice(0, 10)) {
         for (const vuelta of vueltas.slice(0, 10)) {
@@ -667,8 +744,6 @@ app.get('/api/vuelos', async (req, res) => {
       };
     }
 
-    // Sumar costo de equipaje estimado a cada opción.
-    // Maletas se cobran por persona con asiento (adultos + niños), no a bebés en regazo.
     if (maletas > 0) {
       const costoUnitario = COSTO_MALETA[moneda] ?? COSTO_MALETA.USD;
       const paxConAsiento = adultos + ninos;
@@ -679,7 +754,6 @@ app.get('/api/vuelos', async (req, res) => {
         costoMaletas: costoMaletasTotal,
         precioTotal: o.precioTotal + costoMaletasTotal,
       }));
-      // Reordenar por precio total con maletas (mantiene el orden por más barato)
       resultado.opciones.sort((a, b) => a.precioTotal - b.precioTotal);
     }
 
@@ -703,4 +777,6 @@ app.get('/api/vuelos', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\n  Servidor escuchando en http://localhost:${PORT}\n`);
+  if (!BROWSERLESS_TOKEN) console.log('  ⚠️  BROWSERLESS_TOKEN no configurado — Machu Picchu no va a funcionar');
+  if (!SERPAPI_KEY) console.log('  ⚠️  SERPAPI_KEY no configurado — Vuelos no va a funcionar');
 });

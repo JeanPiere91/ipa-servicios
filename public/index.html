@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Inka Planet Adventure · Herramientas de viaje</title>
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <title>Travel Tools</title>
+    <link rel="icon" href="data:," />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       .day-cell {
@@ -27,35 +27,29 @@
     </style>
   </head>
   <body class="bg-slate-50 text-slate-800 min-h-screen">
-    <header class="bg-white shadow-md border-b-4 border-orange-500">
-      <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center gap-4 flex-wrap">
-        <a href="https://ipa.com.pe" target="_blank" class="flex items-center gap-3 group">
-          <img src="/logo.svg" alt="Inka Planet Adventure" class="h-12 md:h-14" />
-          <div class="hidden sm:block border-l border-slate-200 pl-3">
-            <div class="text-lg md:text-xl font-bold text-slate-800 group-hover:text-orange-600 transition leading-tight">
-              Inka Planet Adventure
-            </div>
-            <div class="text-xs text-slate-500 italic">Somos tu Agencia de Viajes Local y Experta en Perú</div>
+    <header class="bg-gradient-to-br from-slate-800 to-slate-700 text-white shadow-lg">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-2">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="bg-white/10 backdrop-blur rounded-xl p-2.5 ring-1 ring-white/20">
+            <svg class="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
           </div>
-        </a>
-        <div class="flex items-center gap-2">
-          <a href="https://wa.link/3trkvj" target="_blank"
-             class="inline-flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold px-3 py-2 rounded-lg shadow-sm transition">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
-            <span class="hidden sm:inline">WhatsApp</span>
-          </a>
-          <a href="tel:+51992005739" class="hidden md:inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-3 py-2 rounded-lg transition">
-            📞 +51 992 005 739
-          </a>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-bold leading-tight">Travel Tools</h1>
+            <p class="text-xs sm:text-sm text-slate-300">Consulta de disponibilidad y vuelos</p>
+          </div>
         </div>
-      </div>
-      <div class="max-w-6xl mx-auto px-6 flex justify-between items-end flex-wrap gap-2">
-        <nav class="flex gap-1">
-          <button data-tab="machupicchu" class="tab-btn px-5 py-2 font-semibold border-b-4 border-orange-500 text-orange-600">Machu Picchu</button>
-          <button data-tab="vuelos" class="tab-btn px-5 py-2 font-semibold border-b-4 border-transparent text-slate-500 hover:text-slate-700">Vuelos</button>
+        <nav class="flex gap-1 -mb-[1px]">
+          <button data-tab="machupicchu" class="tab-btn px-4 sm:px-6 py-3 text-sm sm:text-base font-semibold border-b-[3px] border-white text-white">
+            <span class="hidden sm:inline">🏛️ </span>Machu Picchu
+          </button>
+          <button data-tab="vuelos" class="tab-btn px-4 sm:px-6 py-3 text-sm sm:text-base font-semibold border-b-[3px] border-transparent text-slate-300 hover:text-white">
+            <span class="hidden sm:inline">✈️ </span>Vuelos
+          </button>
         </nav>
-        <div id="loaded-at" class="text-xs text-slate-500 pb-2"></div>
       </div>
+      <div id="loaded-at" class="hidden"></div>
     </header>
 
     <main class="max-w-6xl mx-auto p-6 space-y-6">
@@ -116,7 +110,7 @@
         <div class="mt-4 flex gap-3 items-center flex-wrap">
           <button
             id="btn-consultar"
-            class="bg-orange-600 text-white font-semibold px-6 py-2 rounded hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+            class="bg-indigo-600 text-white font-semibold px-6 py-2 rounded hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
           >
             Consultar disponibilidad
           </button>
@@ -251,7 +245,7 @@
                 </select>
               </div>
               <div>
-                <button type="submit" class="w-full bg-orange-600 text-white font-semibold px-6 py-2 rounded hover:bg-orange-700 disabled:bg-slate-300">
+                <button type="submit" class="w-full bg-indigo-600 text-white font-semibold px-6 py-2 rounded hover:bg-indigo-700 disabled:bg-slate-300">
                   Buscar 5 más baratos
                 </button>
               </div>
@@ -267,12 +261,12 @@
     <!-- Modal de horarios -->
     <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-auto">
-        <div class="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-5 py-3 flex justify-between items-center">
+        <div class="bg-gradient-to-r from-indigo-600 to-indigo-500 text-white px-5 py-3 flex justify-between items-center">
           <div>
             <div id="modal-fecha" class="font-bold"></div>
-            <div id="modal-ruta" class="text-xs text-orange-100"></div>
+            <div id="modal-ruta" class="text-xs text-indigo-100"></div>
           </div>
-          <button id="modal-close" class="text-2xl leading-none hover:text-orange-200">&times;</button>
+          <button id="modal-close" class="text-2xl leading-none hover:text-indigo-200">&times;</button>
         </div>
         <div id="modal-body" class="p-5"></div>
       </div>
@@ -547,10 +541,10 @@
           const target = btn.dataset.tab;
           document.querySelectorAll('.tab-btn').forEach((b) => {
             const active = b.dataset.tab === target;
-            b.classList.toggle('border-orange-500', active);
-            b.classList.toggle('text-orange-600', active);
+            b.classList.toggle('border-white', active);
+            b.classList.toggle('text-white', active);
             b.classList.toggle('border-transparent', !active);
-            b.classList.toggle('text-slate-500', !active);
+            b.classList.toggle('text-slate-300', !active);
           });
           sel('tab-machupicchu').classList.toggle('hidden', target !== 'machupicchu');
           sel('tab-vuelos').classList.toggle('hidden', target !== 'vuelos');
@@ -611,7 +605,7 @@
                 const display = `${a.ciudad}, ${a.pais}`;
                 return `<li class="ac-opt p-2 cursor-pointer hover:bg-slate-100 text-sm border-b last:border-b-0"
                           data-iata="${a.iata}" data-display="${display.replace(/"/g, '&quot;')}">
-                  <span class="font-mono font-bold text-orange-700">${a.iata}</span>
+                  <span class="font-mono font-bold text-indigo-700">${a.iata}</span>
                   ✈️ ${display}
                 </li>`;
               })
@@ -775,7 +769,7 @@
           .filter(Boolean)
           .join(', ') || t.numeroVuelo || '';
         const div = document.createElement('div');
-        div.className = 'border-l-4 border-orange-200 pl-3 py-1';
+        div.className = 'border-l-4 border-indigo-200 pl-3 py-1';
         div.innerHTML = `
           <div class="text-xs text-slate-500 font-semibold uppercase">${label} · <span class="aer-tramo"></span></div>
           <div class="flex items-baseline gap-2 mt-1 flex-wrap">
@@ -845,12 +839,12 @@
               <div class="flex justify-between items-start gap-4 mb-3">
                 <div>
                   <div class="flex items-center gap-2 mb-1">
-                    <span class="bg-orange-100 text-orange-700 text-xs font-bold rounded px-2 py-1">OPCIÓN ${i + 1}</span>
+                    <span class="bg-indigo-100 text-indigo-700 text-xs font-bold rounded px-2 py-1">OPCIÓN ${i + 1}</span>
                     <span class="font-semibold aer"></span>
                   </div>
                 </div>
                 <div class="text-right">
-                  <div class="text-2xl font-bold text-orange-700 prc"></div>
+                  <div class="text-2xl font-bold text-indigo-700 prc"></div>
                   <div class="text-xs text-slate-500 totales"></div>
                 </div>
               </div>
