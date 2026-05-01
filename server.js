@@ -240,7 +240,19 @@ function waitApi(page, pattern, ms = 8000) {
     .catch(() => null);
 }
 
-function leerHeaderCalendario(page) {
+async function leerHeaderCalendario(page) {
+  // En producción (latencia Render→Browserless mayor) el header puede estar
+  // momentáneamente vacío. Esperamos a que tenga texto antes de leer.
+  await page
+    .waitForFunction(
+      (s) => {
+        const el = document.querySelector(s);
+        return el && el.innerText.trim().length > 0;
+      },
+      SEL.calendarHeader,
+      { timeout: 8000 },
+    )
+    .catch(() => {});
   return page.evaluate((s) => document.querySelector(s)?.innerText.trim() || '', SEL.calendarHeader);
 }
 
