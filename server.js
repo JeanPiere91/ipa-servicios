@@ -325,12 +325,22 @@ async function navegarA(page, targetMes, targetAnio) {
     await asegurarCalendarioAbierto(page);
     const header = await leerHeaderCalendario(page);
     const parsed = parseHeaderCalendario(header);
-    if (!parsed) return false;
-    if (parsed.mes === targetMes && parsed.anio === targetAnio) return true;
+    if (!parsed) {
+      console.log(`[navegarA] iter=${i} header="${header}" no parseable → false`);
+      return false;
+    }
+    if (parsed.mes === targetMes && parsed.anio === targetAnio) {
+      console.log(`[navegarA] iter=${i} llegó a target ${targetMes}/${targetAnio}`);
+      return true;
+    }
     const adelante = parsed.anio * 12 + parsed.mes < targetAnio * 12 + targetMes;
     const ok = await cambiarMes(page, adelante);
-    if (!ok) return false;
+    if (!ok) {
+      console.log(`[navegarA] iter=${i} cambiarMes(${adelante}) falló (botón disabled?)`);
+      return false;
+    }
   }
+  console.log(`[navegarA] 24 iters sin llegar a target ${targetMes}/${targetAnio}`);
   return false;
 }
 
@@ -372,18 +382,23 @@ app.get('/api/disponibilidad', async (req, res) => {
   try {
     const out = await singleFlight(cacheKey, async () => {
       const t0 = Date.now();
+      console.log(`[disp] iniciando circuito=${idCircuitoQ} ruta=${idRutaQ} meses=${meses}`);
       const session = await obtenerSesion(idCircuitoQ, idRutaQ);
       try {
         const { page, circuito, ruta } = session;
         const headerInicial = await leerHeaderCalendario(page);
+        console.log(`[disp] headerInicial="${headerInicial}" reused=${session.reused}`);
         const inicial = parseHeaderCalendario(headerInicial);
         if (!inicial) throw new Error(`No se pudo parsear el header inicial: "${headerInicial}"`);
+        console.log(`[disp] inicial mes=${inicial.mes} anio=${inicial.anio}`);
 
         const mesesData = [];
         for (let i = 0; i < meses; i++) {
           const targetMes = (inicial.mes + i) % 12;
           const targetAnio = inicial.anio + Math.floor((inicial.mes + i) / 12);
+          console.log(`[disp] i=${i} targetMes=${targetMes} targetAnio=${targetAnio} ...`);
           const ok = await navegarA(page, targetMes, targetAnio);
+          console.log(`[disp] i=${i} navegarA=${ok}`);
           if (!ok) break;
           const mesData = await page.evaluate(
             ({ headerSel, cellSel }) => {
